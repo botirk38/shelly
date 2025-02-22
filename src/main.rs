@@ -1,7 +1,8 @@
 use log::{debug, error, info, warn};
 use std::collections::HashSet;
-use std::env;
+use std::env::{self};
 use std::io::{self, Write};
+use std::path::Path;
 use std::process::exit;
 
 #[derive(Debug)]
@@ -65,6 +66,20 @@ impl Shell {
         self.execute_command(input)
     }
 
+    fn find_executable(&self, cmd: &str) -> Option<String> {
+        if let Ok(path) = env::var("PATH") {
+            for dir in path.split(":") {
+                let full_path = Path::new(dir).join(cmd);
+
+                if full_path.exists() {
+                    return Some(full_path.to_string_lossy().into_owned());
+                }
+            }
+        }
+
+        None
+    }
+
     fn execute_command(&mut self, input: &str) -> bool {
         let parts: Vec<&str> = input.split_whitespace().collect();
         if let Some(command) = parts.first() {
@@ -119,7 +134,10 @@ impl Shell {
                     if self.is_builtin(cmd) {
                         println!("{} is a shell builtin", cmd);
                     } else {
-                        println!("{}: not found", cmd);
+                        match self.find_executable(cmd) {
+                            Some(path) => println!("{} is {}", cmd, path),
+                            None => println!("{}: not found", cmd),
+                        }
                     }
                 }
                 Ok(true)
