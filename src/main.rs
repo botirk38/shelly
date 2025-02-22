@@ -1,6 +1,6 @@
 use std::env;
 use std::io::{self, Write};
-use std::process::Command;
+use std::process::{exit, Command};
 
 #[derive(Debug)]
 struct Shell {
@@ -46,29 +46,34 @@ impl Shell {
     }
 
     fn execute_command(&mut self, input: &str) -> bool {
-        match input {
-            "exit" => return false,
-            "history" => {
-                for (i, cmd) in self.history.iter().enumerate() {
-                    println!("{}: {}", i + 1, cmd);
+        let parts: Vec<&str> = input.split_whitespace().collect();
+        if let Some(command) = parts.first() {
+            match *command {
+                "exit" => {
+                    let status = parts
+                        .get(1)
+                        .and_then(|s| s.parse::<i32>().ok())
+                        .unwrap_or(0);
+                    exit(status);
                 }
-            }
-            cmd => {
-                let parts: Vec<&str> = cmd.split_whitespace().collect();
-                if let Some(command) = parts.first() {
+                "history" => {
+                    for (i, cmd) in self.history.iter().enumerate() {
+                        println!("{}: {}", i + 1, cmd);
+                    }
+                }
+                cmd => {
                     let args = &parts[1..];
-
-                    match Command::new(command)
+                    match Command::new(cmd)
                         .args(args)
                         .current_dir(&self.current_dir)
                         .spawn()
                     {
                         Ok(mut child) => {
                             if child.wait().is_err() {
-                                println!("{}: command not found", command);
+                                println!("{}: command not found", cmd);
                             }
                         }
-                        Err(_) => println!("{}: command not found", command),
+                        Err(_) => println!("{}: command not found", cmd),
                     }
                 }
             }
