@@ -88,9 +88,23 @@ impl Shell {
                         QuoteState::Double
                     };
                 }
-                '\\' if quote_state == QuoteState::None => {
+                '\\' => {
                     if let Some(next_char) = chars.next() {
-                        current_token.push(next_char);
+                        match quote_state {
+                            QuoteState::Double => {
+                                if next_char == '"' || next_char == '\\' {
+                                    current_token.push(next_char);
+                                } else {
+                                    current_token.push('\\');
+                                    current_token.push(next_char);
+                                }
+                            }
+                            QuoteState::None => current_token.push(next_char),
+                            QuoteState::Single => {
+                                current_token.push('\\');
+                                current_token.push(next_char);
+                            }
+                        }
                     }
                 }
                 ' ' if quote_state == QuoteState::None => {
