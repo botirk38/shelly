@@ -8,6 +8,11 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
+
+static TAB_PRESSED: AtomicBool = AtomicBool::new(false);
+static LAST_TAB_TIME: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[derive(Debug)]
 struct Shell {
@@ -369,16 +374,25 @@ impl rustyline::completion::Completer for RustylineCompleter {
         _pos: usize,
         _ctx: &rustyline::Context<'_>,
     ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
-        // Get all executables from PATH
-        let mut completions = Vec::new();
+        let mut matches = Vec::new();
 
+        // Add builtin commands
+        let builtins = ["echo", "type", "exit", "pwd", "cd"];
+        matches.extend(
+            builtins
+                .iter()
+                .filter(|cmd| cmd.starts_with(line))
+                .map(|s| s.to_string()),
+        );
+
+        // Add executables from PATH
         if let Some(paths) = std::env::var_os("PATH") {
             for dir in std::env::split_paths(&paths) {
                 if let Ok(entries) = std::fs::read_dir(dir) {
                     for entry in entries.filter_map(Result::ok) {
                         if let Ok(name) = entry.file_name().into_string() {
                             if name.starts_with(line) {
-                                completions.push(name + " ");
+                                matches.push(name);
                             }
                         }
                     }
@@ -386,15 +400,28 @@ impl rustyline::completion::Completer for RustylineCompleter {
             }
         }
 
-        // Add builtin commands
-        let builtins = ["echo", "type", "exit", "pwd", "cd"];
-        completions.extend(
-            builtins
-                .iter()
-                .filter(|w| w.starts_with(line))
-                .map(|s| s.to_string() + " "),
-        );
+        matches.sort();
+        matches.dedup();
 
-        Ok((0, completions))
+        if matches.len() > 1 {
+            let now = Instant::now().elapsed().as_millis() as u64;
+            let last_tab = LAST_TAB_TIME.load(Ordering::Relaxed);
+
+            if now - last_tab < 500 {
+                // Within 500ms
+                println!("\n{}", matches.join("  "));
+                print!("$ {}", line);
+                std::io::stdout().flush().unwrap();
+                TAB_PRESSED.store(false, Ordering::Relaxed);
+            } else {
+                print!("\x07");
+                std::io::stdout().flush().unwrap();
+                TAB_PRESSED.store(true, Ordering::Relaxed);
+            }
+            LAST_TAB_TIME.store(now, Ordering::Relaxed);
+            return Ok((0, vec![]));
+        }
+
+        Ok((0, matches.into_iter().map(|s| s + " ").collect()))
     }
 }
