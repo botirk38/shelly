@@ -364,17 +364,37 @@ struct RustylineHelper {
 impl rustyline::completion::Completer for RustylineCompleter {
     type Candidate = String;
     fn complete(
-        &self, // FIXME should be `&mut self`
+        &self,
         line: &str,
         _pos: usize,
         _ctx: &rustyline::Context<'_>,
     ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
-        let words = ["echo", "type", "exit", "pwd", "cd"];
-        let completions = words
-            .iter()
-            .filter(|w| w.starts_with(line))
-            .map(|s| s.to_string() + " ")
-            .collect();
+        // Get all executables from PATH
+        let mut completions = Vec::new();
+
+        if let Some(paths) = std::env::var_os("PATH") {
+            for dir in std::env::split_paths(&paths) {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.filter_map(Result::ok) {
+                        if let Ok(name) = entry.file_name().into_string() {
+                            if name.starts_with(line) {
+                                completions.push(name + " ");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add builtin commands
+        let builtins = ["echo", "type", "exit", "pwd", "cd"];
+        completions.extend(
+            builtins
+                .iter()
+                .filter(|w| w.starts_with(line))
+                .map(|s| s.to_string() + " "),
+        );
+
         Ok((0, completions))
     }
 }
