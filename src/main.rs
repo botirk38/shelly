@@ -19,6 +19,7 @@ impl Shell {
         builtin_commands.insert("echo".to_string());
         builtin_commands.insert("pwd".to_string());
         builtin_commands.insert("type".to_string());
+        builtin_commands.insert("cd".to_string());
 
         Shell {
             current_dir: env::current_dir()
@@ -121,6 +122,25 @@ impl Shell {
             "pwd" => {
                 println!("{}", self.current_dir);
                 Ok(true)
+            }
+
+            "cd" => {
+                if let Some(dir) = args.first() {
+                    match env::set_current_dir(dir) {
+                        Ok(_) => {
+                            self.current_dir = env::current_dir()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_string();
+                        }
+                        Err(_) => {
+                            println!("cd: {}: No such file or directory", dir);
+                        }
+                    }
+                    Ok(true)
+                } else {
+                    Ok(true)
+                }
             }
             "type" => {
                 if let Some(cmd) = args.first() {
