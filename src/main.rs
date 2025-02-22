@@ -126,7 +126,16 @@ impl Shell {
 
             "cd" => {
                 if let Some(dir) = args.first() {
-                    match env::set_current_dir(dir) {
+                    let target_dir = if *dir == "~" {
+                        env::var("HOME").unwrap_or_default()
+                    } else if dir.starts_with("~/") {
+                        let home = env::var("HOME").unwrap_or_default();
+                        format!("{}{}", home, &dir[1..])
+                    } else {
+                        dir.to_string()
+                    };
+
+                    match env::set_current_dir(&target_dir) {
                         Ok(_) => {
                             self.current_dir = env::current_dir()
                                 .unwrap_or_default()
