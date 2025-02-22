@@ -54,12 +54,15 @@ impl Shell {
 
     fn run(&mut self) {
         loop {
-            let prompt = format!("$ ");
-            match self.editor.readline(&prompt) {
+            let prompt = "$ ";
+
+            match self.editor.readline(prompt) {
                 Ok(line) => {
                     let line = line.trim();
+
                     if !line.is_empty() {
-                        if self.editor.add_history_entry(line).is_ok() {}
+                        let _ = self.editor.add_history_entry(line);
+
                         if !self.execute_command(line) {
                             break;
                         }
