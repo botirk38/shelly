@@ -18,16 +18,13 @@ enum QuoteState {
     Double,
 }
 
-
-
 impl Shell {
     fn new() -> Self {
-        let builtin_commands: HashSet<String> = vec![
-            "exit", "history", "echo", "pwd", "type", "cd",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect();
+        let builtin_commands: HashSet<String> =
+            vec!["exit", "history", "echo", "pwd", "type", "cd"]
+                .into_iter()
+                .map(String::from)
+                .collect();
 
         Shell {
             current_dir: env::current_dir().unwrap_or_else(|_| PathBuf::from("/")),
@@ -70,52 +67,55 @@ impl Shell {
     }
 
     fn parse_command(&self, input: &str) -> Vec<String> {
-    let mut tokens = Vec::new();
-    let mut current_token = String::with_capacity(input.len());
-    let mut quote_state = QuoteState::None;
+        let mut tokens = Vec::new();
+        let mut current_token = String::new();
+        let mut quote_state = QuoteState::None;
+        let mut chars = input.chars();
 
-    for c in input.chars(){
-        match c {
-            '\'' if quote_state != QuoteState::Double => {
-                quote_state = if quote_state == QuoteState::Single {
-                    QuoteState::None
-                } else {
-                    QuoteState::Single
+        while let Some(c) = chars.next() {
+            match c {
+                '\'' if quote_state != QuoteState::Double => {
+                    quote_state = if quote_state == QuoteState::Single {
+                        QuoteState::None
+                    } else {
+                        QuoteState::Single
+                    };
                 }
-            }
-            '"' if quote_state != QuoteState::Single => {
-                quote_state = if quote_state == QuoteState::Double {
-                    QuoteState::None
-                } else {
-                    QuoteState::Double
+                '"' if quote_state != QuoteState::Single => {
+                    quote_state = if quote_state == QuoteState::Double {
+                        QuoteState::None
+                    } else {
+                        QuoteState::Double
+                    };
                 }
-            }
-            ' ' if quote_state == QuoteState::None => {
-                if !current_token.is_empty() {
-                    tokens.push(current_token);
-                    current_token = String::with_capacity(input.len());
+                '\\' if quote_state == QuoteState::None => {
+                    if let Some(next_char) = chars.next() {
+                        current_token.push(next_char);
+                    }
                 }
+                ' ' if quote_state == QuoteState::None => {
+                    if !current_token.is_empty() {
+                        tokens.push(current_token);
+                        current_token = String::new();
+                    }
+                }
+                _ => current_token.push(c),
             }
-            _ => current_token.push(c)
         }
+
+        if !current_token.is_empty() {
+            tokens.push(current_token);
+        }
+
+        tokens
     }
-
-    if !current_token.is_empty() {
-        tokens.push(current_token);
-    }
-
-    tokens
-}
-
-
-
 
     fn execute_command(&mut self, input: &str) -> bool {
         let tokens = self.parse_command(input);
-        
+
         if let Some(command) = tokens.first() {
             let args = &tokens[1..];
-            
+
             if self.is_builtin(command) {
                 return self.run_builtin_command(command, args).unwrap_or(true);
             }
@@ -124,7 +124,7 @@ impl Shell {
                 match Command::new(command)
                     .args(args)
                     .current_dir(&self.current_dir)
-                    .spawn() 
+                    .spawn()
                 {
                     Ok(mut child) => {
                         let _ = child.wait();
@@ -145,7 +145,11 @@ impl Shell {
         self.builtin_commands.contains(cmd)
     }
 
-    fn run_builtin_command(&mut self, command: &str, args: &[String]) -> Result<bool, &'static str> {
+    fn run_builtin_command(
+        &mut self,
+        command: &str,
+        args: &[String],
+    ) -> Result<bool, &'static str> {
         match command {
             "exit" => {
                 let status = args
