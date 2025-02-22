@@ -16,8 +16,8 @@ struct Shell {
 struct CommandParts {
     command: String,
     args: Vec<String>,
-    output_redirect: Option<String>,
-    error_redirect: Option<String>,
+    output_redirect: Option<(String, bool)>,
+    error_redirect: Option<(String, bool)>,
 }
 
 #[derive(PartialEq)]
@@ -79,11 +79,19 @@ impl Shell {
         while i < tokens.len() {
             match tokens[i].as_str() {
                 ">" | "1>" if i + 1 < tokens.len() => {
-                    command_parts.output_redirect = Some(tokens[i + 1].clone());
+                    command_parts.output_redirect = Some((tokens[i + 1].clone(), false));
+                    i += 2;
+                }
+                ">>" | "1>>" if i + 1 < tokens.len() => {
+                    command_parts.output_redirect = Some((tokens[i + 1].clone(), true));
                     i += 2;
                 }
                 "2>" if i + 1 < tokens.len() => {
-                    command_parts.error_redirect = Some(tokens[i + 1].clone());
+                    command_parts.error_redirect = Some((tokens[i + 1].clone(), false));
+                    i += 2;
+                }
+                "2>>" if i + 1 < tokens.len() => {
+                    command_parts.error_redirect = Some((tokens[i + 1].clone(), true));
                     i += 2;
                 }
                 token => {
@@ -182,12 +190,19 @@ impl Shell {
             }
             "echo" => {
                 let output = cmd_parts.args.join(" ");
-                if let Some(redirect_path) = &cmd_parts.output_redirect {
-                    if let Ok(mut file) = File::create(redirect_path) {
+                if let Some((path, append)) = &cmd_parts.output_redirect {
+                    let file = if *append {
+                        File::options().append(true).create(true).open(path)
+                    } else {
+                        File::create(path)
+                    };
+                    if let Ok(mut file) = file {
                         let _ = writeln!(file, "{}", output);
                     }
-                } else if let Some(redirect_path) = &cmd_parts.error_redirect {
-                    let _ = File::create(redirect_path);
+                } else if let Some((path, _)) = &cmd_parts.error_redirect {
+                    // For echo, we don't write to stderr redirect file
+                    // Just create the file if it doesn't exist
+                    let _ = File::create(path);
                     println!("{}", output);
                 } else {
                     println!("{}", output);
@@ -195,8 +210,13 @@ impl Shell {
             }
             "pwd" => {
                 let output = self.current_dir.display().to_string();
-                if let Some(redirect_path) = &cmd_parts.error_redirect {
-                    if let Ok(mut file) = File::create(redirect_path) {
+                if let Some((path, append)) = &cmd_parts.error_redirect {
+                    let file = if *append {
+                        File::options().append(true).create(true).open(path)
+                    } else {
+                        File::create(path)
+                    };
+                    if let Ok(mut file) = file {
                         let _ = writeln!(file, "{}", output);
                     }
                 } else {
@@ -211,8 +231,13 @@ impl Shell {
                     .map(|(i, cmd)| format!("{}: {}", i + 1, cmd))
                     .collect::<Vec<_>>()
                     .join("\n");
-                if let Some(redirect_path) = &cmd_parts.error_redirect {
-                    if let Ok(mut file) = File::create(redirect_path) {
+                if let Some((path, append)) = &cmd_parts.error_redirect {
+                    let file = if *append {
+                        File::options().append(true).create(true).open(path)
+                    } else {
+                        File::create(path)
+                    };
+                    if let Ok(mut file) = file {
                         let _ = writeln!(file, "{}", output);
                     }
                 } else {
@@ -242,8 +267,13 @@ impl Shell {
                 } else {
                     String::new()
                 };
-                if let Some(redirect_path) = &cmd_parts.error_redirect {
-                    if let Ok(mut file) = File::create(redirect_path) {
+                if let Some((path, append)) = &cmd_parts.error_redirect {
+                    let file = if *append {
+                        File::options().append(true).create(true).open(path)
+                    } else {
+                        File::create(path)
+                    };
+                    if let Ok(mut file) = file {
                         let _ = writeln!(file, "{}", output);
                     }
                 } else {
@@ -264,14 +294,24 @@ impl Shell {
         let mut command = Command::new(&cmd_parts.command);
         command.args(&cmd_parts.args).current_dir(&self.current_dir);
 
-        if let Some(redirect_path) = &cmd_parts.output_redirect {
-            if let Ok(file) = File::create(redirect_path) {
+        if let Some((path, append)) = &cmd_parts.output_redirect {
+            let file = if *append {
+                File::options().append(true).create(true).open(path)
+            } else {
+                File::create(path)
+            };
+            if let Ok(file) = file {
                 command.stdout(Stdio::from(file));
             }
         }
 
-        if let Some(redirect_path) = &cmd_parts.error_redirect {
-            if let Ok(file) = File::create(redirect_path) {
+        if let Some((path, append)) = &cmd_parts.error_redirect {
+            let file = if *append {
+                File::options().append(true).create(true).open(path)
+            } else {
+                File::create(path)
+            };
+            if let Ok(file) = file {
                 command.stderr(Stdio::from(file));
             }
         }
