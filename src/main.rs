@@ -376,8 +376,7 @@ impl rustyline::completion::Completer for RustylineCompleter {
     ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
         let mut matches = Vec::new();
 
-        // Add builtin commands
-        let builtins = ["echo", "type", "exit", "pwd", "cd"];
+        let builtins = ["echo", "type", "exit", "pwd", "cd", "history"];
         matches.extend(
             builtins
                 .iter()
@@ -385,7 +384,7 @@ impl rustyline::completion::Completer for RustylineCompleter {
                 .map(|s| s.to_string()),
         );
 
-        // Add executables from PATH
+        // Find executables from PATH that match the prefix
         if let Some(paths) = std::env::var_os("PATH") {
             for dir in std::env::split_paths(&paths) {
                 if let Ok(entries) = std::fs::read_dir(dir) {
@@ -403,25 +402,41 @@ impl rustyline::completion::Completer for RustylineCompleter {
         matches.sort();
         matches.dedup();
 
-        if matches.len() > 1 {
-            let now = Instant::now().elapsed().as_millis() as u64;
-            let last_tab = LAST_TAB_TIME.load(Ordering::Relaxed);
-
-            if now - last_tab < 500 {
-                // Within 500ms
-                println!("\n{}", matches.join("  "));
-                print!("$ {}", line);
-                std::io::stdout().flush().unwrap();
-                TAB_PRESSED.store(false, Ordering::Relaxed);
-            } else {
-                print!("\x07");
-                std::io::stdout().flush().unwrap();
-                TAB_PRESSED.store(true, Ordering::Relaxed);
-            }
-            LAST_TAB_TIME.store(now, Ordering::Relaxed);
+        if matches.is_empty() {
             return Ok((0, vec![]));
         }
 
-        Ok((0, matches.into_iter().map(|s| s + " ").collect()))
+        if matches.len() == 1 {
+            return Ok((0, vec![matches[0].clone() + " "]));
+        }
+
+        // Find longest common prefix
+        let mut common_prefix = matches[0].clone();
+        for name in &matches[1..] {
+            while !name.starts_with(&common_prefix) {
+                common_prefix.pop();
+            }
+        }
+
+        // Always return the common prefix on first tab if it's longer than current input
+        if common_prefix.len() > line.len() {
+            return Ok((0, vec![common_prefix]));
+        }
+
+        // Show all matches only on double-tab
+        let now = Instant::now().elapsed().as_millis() as u64;
+        let last_tab = LAST_TAB_TIME.load(Ordering::Relaxed);
+
+        if now - last_tab < 500 {
+            println!("\n{}", matches.join("  "));
+            print!("$ {}", line);
+            std::io::stdout().flush().unwrap();
+            TAB_PRESSED.store(false, Ordering::Relaxed);
+        } else {
+            TAB_PRESSED.store(true, Ordering::Relaxed);
+        }
+
+        LAST_TAB_TIME.store(now, Ordering::Relaxed);
+        Ok((0, vec![]))
     }
 }
