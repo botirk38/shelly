@@ -17,6 +17,7 @@ struct CommandParts {
     command: String,
     args: Vec<String>,
     output_redirect: Option<String>,
+    error_redirect: Option<String>,
 }
 
 #[derive(PartialEq)]
@@ -71,6 +72,7 @@ impl Shell {
             command: String::new(),
             args: Vec::new(),
             output_redirect: None,
+            error_redirect: None,
         };
 
         let mut i = 0;
@@ -78,6 +80,10 @@ impl Shell {
             match tokens[i].as_str() {
                 ">" | "1>" if i + 1 < tokens.len() => {
                     command_parts.output_redirect = Some(tokens[i + 1].clone());
+                    i += 2;
+                }
+                "2>" if i + 1 < tokens.len() => {
+                    command_parts.error_redirect = Some(tokens[i + 1].clone());
                     i += 2;
                 }
                 token => {
@@ -165,7 +171,7 @@ impl Shell {
     }
 
     fn execute_builtin(&mut self, cmd_parts: &CommandParts) -> bool {
-        let output = match cmd_parts.command.as_str() {
+        match cmd_parts.command.as_str() {
             "exit" => {
                 let status = cmd_parts
                     .args
@@ -174,32 +180,58 @@ impl Shell {
                     .unwrap_or(0);
                 std::process::exit(status);
             }
-            "echo" => cmd_parts.args.join(" "),
-            "pwd" => self.current_dir.display().to_string(),
-            "history" => self
-                .history
-                .iter()
-                .enumerate()
-                .map(|(i, cmd)| format!("{}: {}", i + 1, cmd))
-                .collect::<Vec<_>>()
-                .join("\n"),
-            "cd" => {
-                match cmd_parts.args.first() {
-                    Some(dir) if dir == "~" => self.change_to_home_dir(),
-                    Some(dir) if dir.starts_with("~/") => {
-                        if let Ok(home) = env::var("HOME") {
-                            let path = format!("{}{}", home, &dir[1..]);
-                            self.change_directory(&path);
-                        }
+            "echo" => {
+                let output = cmd_parts.args.join(" ");
+                if let Some(redirect_path) = &cmd_parts.output_redirect {
+                    if let Ok(mut file) = File::create(redirect_path) {
+                        let _ = writeln!(file, "{}", output);
                     }
-                    Some(dir) => self.change_directory(dir),
-                    None => self.change_to_home_dir(),
+                } else if let Some(redirect_path) = &cmd_parts.error_redirect {
+                    let _ = File::create(redirect_path);
+                    println!("{}", output);
+                } else {
+                    println!("{}", output);
                 }
-                return true;
             }
-
+            "pwd" => {
+                let output = self.current_dir.display().to_string();
+                if let Some(redirect_path) = &cmd_parts.error_redirect {
+                    if let Ok(mut file) = File::create(redirect_path) {
+                        let _ = writeln!(file, "{}", output);
+                    }
+                } else {
+                    println!("{}", output);
+                }
+            }
+            "history" => {
+                let output = self
+                    .history
+                    .iter()
+                    .enumerate()
+                    .map(|(i, cmd)| format!("{}: {}", i + 1, cmd))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if let Some(redirect_path) = &cmd_parts.error_redirect {
+                    if let Ok(mut file) = File::create(redirect_path) {
+                        let _ = writeln!(file, "{}", output);
+                    }
+                } else {
+                    println!("{}", output);
+                }
+            }
+            "cd" => match cmd_parts.args.first() {
+                Some(dir) if dir == "~" => self.change_to_home_dir(),
+                Some(dir) if dir.starts_with("~/") => {
+                    if let Ok(home) = env::var("HOME") {
+                        let path = format!("{}{}", home, &dir[1..]);
+                        self.change_directory(&path);
+                    }
+                }
+                Some(dir) => self.change_directory(dir),
+                None => self.change_to_home_dir(),
+            },
             "type" => {
-                if let Some(cmd) = cmd_parts.args.first() {
+                let output = if let Some(cmd) = cmd_parts.args.first() {
                     if self.is_builtin(cmd) {
                         format!("{} is a shell builtin", cmd)
                     } else if let Some(path) = self.find_executable(cmd) {
@@ -209,17 +241,16 @@ impl Shell {
                     }
                 } else {
                     String::new()
+                };
+                if let Some(redirect_path) = &cmd_parts.error_redirect {
+                    if let Ok(mut file) = File::create(redirect_path) {
+                        let _ = writeln!(file, "{}", output);
+                    }
+                } else {
+                    println!("{}", output);
                 }
             }
-            _ => return true,
-        };
-
-        if let Some(redirect_path) = &cmd_parts.output_redirect {
-            if let Ok(mut file) = File::create(redirect_path) {
-                let _ = writeln!(file, "{}", output);
-            }
-        } else {
-            println!("{}", output);
+            _ => {}
         }
         true
     }
@@ -236,6 +267,12 @@ impl Shell {
         if let Some(redirect_path) = &cmd_parts.output_redirect {
             if let Ok(file) = File::create(redirect_path) {
                 command.stdout(Stdio::from(file));
+            }
+        }
+
+        if let Some(redirect_path) = &cmd_parts.error_redirect {
+            if let Ok(file) = File::create(redirect_path) {
+                command.stderr(Stdio::from(file));
             }
         }
 
