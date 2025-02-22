@@ -1,15 +1,19 @@
+use rustyline::error::ReadlineError;
+use rustyline::history::FileHistory;
+use rustyline::Editor;
+use rustyline_derive::{Completer, Helper, Highlighter, Hinter, Validator};
 use std::collections::HashSet;
 use std::env;
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 #[derive(Debug)]
 struct Shell {
     current_dir: PathBuf,
-    history: Vec<String>,
     builtin_commands: HashSet<String>,
+    editor: Editor<RustylineHelper, FileHistory>,
 }
 
 #[derive(Debug)]
@@ -35,35 +39,39 @@ impl Shell {
                 .map(String::from)
                 .collect();
 
+        let helper = RustylineHelper {
+            completer: RustylineCompleter,
+        };
+        let mut editor = Editor::new().unwrap();
+        editor.set_helper(Some(helper));
+
         Shell {
             current_dir: env::current_dir().unwrap_or_else(|_| PathBuf::from("/")),
-            history: Vec::with_capacity(100),
             builtin_commands,
+            editor,
         }
     }
 
     fn run(&mut self) {
-        while self.prompt() {}
-    }
-
-    fn prompt(&mut self) -> bool {
-        print!("$ ");
-        if io::stdout().flush().is_err() {
-            return false;
+        loop {
+            let prompt = format!("$ ");
+            match self.editor.readline(&prompt) {
+                Ok(line) => {
+                    let line = line.trim();
+                    if !line.is_empty() {
+                        if self.editor.add_history_entry(line).is_ok() {}
+                        if !self.execute_command(line) {
+                            break;
+                        }
+                    }
+                }
+                Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break,
+                Err(err) => {
+                    println!("Error: {}", err);
+                    break;
+                }
+            }
         }
-
-        let mut input = String::with_capacity(64);
-        if io::stdin().read_line(&mut input).is_err() {
-            return false;
-        }
-
-        let input = input.trim();
-        if input.is_empty() {
-            return true;
-        }
-
-        self.history.push(input.to_string());
-        self.execute_command(input)
     }
 
     fn parse_command(&self, input: &str) -> CommandParts {
@@ -223,27 +231,7 @@ impl Shell {
                     println!("{}", output);
                 }
             }
-            "history" => {
-                let output = self
-                    .history
-                    .iter()
-                    .enumerate()
-                    .map(|(i, cmd)| format!("{}: {}", i + 1, cmd))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                if let Some((path, append)) = &cmd_parts.error_redirect {
-                    let file = if *append {
-                        File::options().append(true).create(true).open(path)
-                    } else {
-                        File::create(path)
-                    };
-                    if let Ok(mut file) = file {
-                        let _ = writeln!(file, "{}", output);
-                    }
-                } else {
-                    println!("{}", output);
-                }
-            }
+            "history" => {}
             "cd" => match cmd_parts.args.first() {
                 Some(dir) if dir == "~" => self.change_to_home_dir(),
                 Some(dir) if dir.starts_with("~/") => {
@@ -364,3 +352,26 @@ fn main() {
     shell.run();
 }
 
+struct RustylineCompleter;
+#[derive(Helper, Completer, Hinter, Highlighter, Validator)]
+struct RustylineHelper {
+    #[rustyline(Completer)]
+    completer: RustylineCompleter,
+}
+impl rustyline::completion::Completer for RustylineCompleter {
+    type Candidate = String;
+    fn complete(
+        &self, // FIXME should be `&mut self`
+        line: &str,
+        _pos: usize,
+        _ctx: &rustyline::Context<'_>,
+    ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
+        let words = ["echo", "type", "exit", "pwd", "cd"];
+        let completions = words
+            .iter()
+            .filter(|w| w.starts_with(line))
+            .map(|s| s.to_string() + " ")
+            .collect();
+        Ok((0, completions))
+    }
+}
