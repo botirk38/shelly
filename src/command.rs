@@ -193,10 +193,12 @@ impl CommandParser {
     ///
     /// # Examples
     /// ```
+    /// use codecrafters_shell::command::CommandParser;
+    ///
     /// let cmd = CommandParser::parse("echo hello > output.txt");
-    /// // cmd.command = "echo"
-    /// // cmd.args = ["hello"]
-    /// // cmd.output_redirect = Some(("output.txt", false))
+    /// assert_eq!(cmd.command, "echo");
+    /// assert_eq!(cmd.args, vec!["hello"]);
+    /// assert!(cmd.output_redirect.is_some());
     /// ```
     pub fn parse(input: &str) -> CommandParts {
         let mut lexer = Lexer::new(input.to_string());
