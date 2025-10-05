@@ -51,7 +51,7 @@ This is a basic shell implementation and does **not** support:
 ## Quick Start
 
 ### Prerequisites
-* Rust 1.80.0 or later
+* Rust 1.90.0 or later
 * Cargo (comes with Rust)
 
 ### Build and Run
