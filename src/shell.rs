@@ -30,11 +30,7 @@ impl Shell {
         let builtin_registry = BuiltinRegistry::default();
 
         // Collect built-in command names for tab completion
-        let builtins: HashSet<String> = builtin_registry
-            .get_command_names()
-            .into_iter()
-            .map(String::from)
-            .collect();
+        let builtins: HashSet<String> = builtin_registry.get_command_names().into_iter().collect();
 
         // Set up editor with completion helper
         let helper = RustylineHelper::new(builtins);
@@ -197,4 +193,3 @@ impl Shell {
         }
     }
 }
-

@@ -10,4 +10,3 @@ fn main() {
         Err(e) => eprintln!("Failed to initialize shell: {:?}", e),
     }
 }
-

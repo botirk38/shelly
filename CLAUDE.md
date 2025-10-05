@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Shelly is a POSIX-compliant shell written in Rust. It's a standalone implementation that does not rely on external shell interpreters or runtime dependencies.
+Shelly is a basic interactive shell written in Rust, designed as a learning project. It provides fundamental command execution with I/O redirection and tab completion. **Note: This is NOT POSIX-compliant** - it lacks pipes, variables, globbing, control flow, and many other shell features.
 
 ## Development Commands
 
@@ -17,6 +17,11 @@ Shelly is a POSIX-compliant shell written in Rust. It's a standalone implementat
 - **Run all tests**: `cargo test`
 - **Run specific test**: `cargo test <test_name>`
 - **Run tests without executing**: `cargo test --no-run`
+
+### Code Quality
+- **Format code**: `cargo fmt`
+- **Run linter**: `cargo clippy --all-targets --all-features`
+- **Check formatting**: `cargo fmt -- --check`
 
 ## Architecture
 

@@ -222,4 +222,3 @@ impl rustyline::completion::Completer for RustylineHelper {
         }
     }
 }
-

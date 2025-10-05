@@ -45,4 +45,3 @@ impl From<io::Error> for ShellError {
         ShellError::IoError(err)
     }
 }
-

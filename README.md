@@ -1,7 +1,7 @@
 # <p align="center">🚀 Shelly</p>
 
 <p align="center">
-    <em>A standalone, POSIX-compliant shell written in Rust.</em>
+    <em>A basic interactive shell written in Rust</em>
 </p>
 
 <p align="center">
@@ -12,84 +12,197 @@
 </p>
 
 ## Project Overview
+
 ### Description
-Shelly is a fully standalone, POSIX-compliant shell written in Rust. It is designed to be a lightweight yet powerful alternative to traditional shells, providing fast execution and robust scripting capabilities. Unlike many shell implementations, Shelly does not rely on external dependencies for core functionality, ensuring high performance and portability.
+Shelly is a basic interactive shell written in Rust, designed as a learning project to explore shell implementation concepts. It provides fundamental command execution capabilities with a focus on code quality and Rust best practices.
 
 ### Key Features
-* **Standalone Implementation**: Does not rely on existing shell interpreters or external runtime dependencies.
-* **POSIX Compliance**: Adheres to the POSIX shell standard, ensuring compatibility with shell scripts and common UNIX utilities.
-* **Rust-Based**: Built entirely in Rust for safety, speed, and reliability.
-* **Extensible and Modular**: Designed for easy integration with other Rust projects and custom extensions.
-* **Efficient Execution**: Optimized for minimal overhead and fast command execution.
+* **Basic Command Execution**: Run external commands and a small set of built-in commands
+* **I/O Redirection**: Support for output redirection (`>`, `>>`) and error redirection (`2>`, `2>>`)
+* **Tab Completion**: Intelligent command completion using a Trie-based algorithm
+* **Command History**: Persistent command history across sessions
+* **Rust-Based**: Built entirely in Rust for safety, speed, and reliability
+* **Quote Handling**: Support for single and double quotes with escape sequences
+
+### Supported Built-in Commands
+* `cd` - Change directory (with `~` expansion)
+* `echo` - Print arguments to stdout
+* `pwd` - Print working directory
+* `exit` - Exit the shell with optional status code
+* `type` - Determine if a command is a builtin or show its path
+* `history` - Command history (managed by rustyline)
+
+### Known Limitations
+This is a basic shell implementation and does **not** support:
+* Pipes (`|`)
+* Background jobs (`&`)
+* Shell variables and environment variable expansion (`$VAR`)
+* Command substitution (`$(...)` or backticks)
+* Conditional execution (`&&`, `||`, `;`)
+* Globbing (`*`, `?`, `[...]`)
+* Control flow (`if`, `while`, `for`, `case`)
+* Shell functions
+* Input redirection (`<`, `<<`)
+* Script file execution
+* Most POSIX shell features
+
+**This shell is not suitable for use as a default shell or for running shell scripts.**
 
 ## Quick Start
-To get started with Shelly, follow these steps:
-1. Clone the repository: `git clone https://github.com/botirk38/shelly.git`
-2. Change into the project directory: `cd shelly`
-3. Build the project: `cargo build`
-4. Run the shell: `cargo run`
 
-## Installation
-### Dependencies
-* **Rust**: Install Rust (version 1.64 or later) on your system.
-* **Cargo**: Ensure Cargo (version 1.64 or later) is available as the package manager.
+### Prerequisites
+* Rust 1.80.0 or later
+* Cargo (comes with Rust)
 
-### System Requirements
-* Compatible operating systems: Linux, macOS, Windows (with a UNIX-like environment)
-* Recommended: A terminal emulator that supports ANSI escape sequences
+### Build and Run
+```bash
+# Clone the repository
+git clone https://github.com/botirk38/shelly.git
+cd shelly
 
-### Setup Steps
-1. Clone the repository: `git clone https://github.com/botirk38/shelly.git`
-2. Change into the project directory: `cd shelly`
-3. Build the project: `cargo build`
-4. Install the shell globally (optional): `cargo install --path .`
+# Build the project
+cargo build
 
-## Usage Examples
-### Basic Commands
-* Run a simple command: `echo "Hello, World!"`
-* List directory contents: `ls -l`
-* Change directory: `cd /path/to/directory`
-* Execute a script: `./script.sh`
+# Run the shell
+cargo run
+```
 
-### Advanced Usage
-* Use Shelly as the default shell: `chsh -s $(which shelly)`
-* Create shell scripts with POSIX syntax and execute them using Shelly.
-* Utilize built-in shell functions and scripting features for automation.
+### Install Locally
+```bash
+# Install to ~/.cargo/bin
+cargo install --path .
 
-## API Docs
-Currently, there is no structured API reference available. However, detailed documentation on built-in commands and shell behavior will be provided in future updates.
+# Run the installed binary
+shelly
+```
 
-## Build & Deployment
-### Local Development
-To build and run Shelly locally:
-1. Clone the repository: `git clone https://github.com/botirk38/shelly.git`
-2. Change into the project directory: `cd shelly`
-3. Build the project: `cargo build`
-4. Run the shell: `cargo run`
+## Development
+
+### Building
+```bash
+# Debug build
+cargo build
+
+# Release build (optimized)
+cargo build --release
+```
 
 ### Testing
-* Run all tests: `cargo test`
-* Run specific test: `cargo test <test_name>`
+```bash
+# Run all tests
+cargo test
 
-### Deployment
-To deploy Shelly, you can:
-* Build a release binary: `cargo build --release` and distribute it as a standalone executable.
-* Use Docker: Build a Docker image and distribute it in containerized environments.
+# Run specific test
+cargo test <test_name>
 
-## Contribution Guide
-### Contributing
-Contributions are welcome! Follow these steps:
+# Run tests with output
+cargo test -- --nocapture
+```
+
+### Code Quality
+```bash
+# Format code
+cargo fmt
+
+# Run linter
+cargo clippy --all-targets --all-features
+
+# Check formatting without modifying files
+cargo fmt -- --check
+```
+
+## Usage Examples
+
+### Interactive Mode
+```bash
+$ echo "Hello, World!"
+Hello, World!
+
+$ cd /tmp
+$ pwd
+/tmp
+
+$ ls -la
+# Lists files (runs external ls command)
+
+$ echo "test" > output.txt
+# Redirects output to file
+
+$ type echo
+echo is a shell builtin
+
+$ type ls
+ls is /usr/bin/ls
+
+$ exit
+```
+
+### Supported Redirection
+```bash
+# Output redirection (overwrite)
+echo "text" > file.txt
+
+# Output redirection (append)
+echo "more text" >> file.txt
+
+# Error redirection
+command_that_fails 2> errors.txt
+
+# Error redirection (append)
+command_that_fails 2>> errors.txt
+```
+
+## Architecture
+
+See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
+
+### Project Structure
+```
+src/
+├── main.rs         # Entry point
+├── lib.rs          # Library exports
+├── shell.rs        # Main shell REPL and command execution
+├── command.rs      # Lexer and parser for command parsing
+├── builtin.rs      # Built-in command implementations
+├── completion.rs   # Tab completion using Trie data structure
+└── error.rs        # Error types
+```
+
+## Contributing
+
+Contributions are welcome! This is a learning project, so feel free to:
+* Add new built-in commands
+* Implement additional shell features
+* Improve error handling
+* Add more tests
+* Fix bugs
+
+### Contribution Steps
 1. Fork the repository
-2. Create a new branch (`git checkout -b feature-branch`)
-3. Commit your changes (`git commit -m "Add feature"`)
-4. Push to the branch (`git push origin feature-branch`)
-5. Open a pull request
+2. Create a feature branch (`git checkout -b feature-name`)
+3. Make your changes
+4. Run tests and linting (`cargo test && cargo clippy`)
+5. Format your code (`cargo fmt`)
+6. Commit your changes (`git commit -m "Description"`)
+7. Push to your fork (`git push origin feature-name`)
+8. Open a pull request
 
-### Code of Conduct
-* Be respectful and considerate of others.
-* Follow best practices for Rust development and POSIX compliance.
-* Ensure your contributions are well-documented and tested.
+### Code Standards
+* Follow Rust best practices and idioms
+* Write tests for new functionality
+* Document public APIs with doc comments
+* Ensure code passes `cargo clippy` and `cargo fmt`
 
-### License
-This project is licensed under the [MIT License](https://github.com/botirk38/shelly/blob/main/LICENSE).
+## License
 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+Built as part of the [CodeCrafters](https://codecrafters.io) Shell challenge.
+
+## Support
+
+For issues or questions:
+* Open an issue on GitHub
+* Check existing issues for solutions
