@@ -1,15 +1,26 @@
 use std::fmt;
 use std::io;
 
+/// Error types for shell operations
+///
+/// Provides structured error handling for various shell failures
+/// including I/O errors, command execution errors, and environment issues.
 #[derive(Debug)]
 pub enum ShellError {
+    /// I/O operation failed
     IoError(io::Error),
+    /// Command not found in PATH or built-ins
     CommandNotFound(String),
+    /// External command execution failed
     ExecutionError(String),
+    /// Rustyline editor error
     EditorError(String),
+    /// Environment variable not found
     EnvVarNotFound(String),
+    /// Directory not found
     DirectoryNotFound(String),
-    CdError(String, String), // (path, error message)
+    /// Change directory failed (path, error message)
+    CdError(String, String),
 }
 
 impl fmt::Display for ShellError {
@@ -28,6 +39,7 @@ impl fmt::Display for ShellError {
 
 impl std::error::Error for ShellError {}
 
+/// Auto-convert io::Error to ShellError for convenience
 impl From<io::Error> for ShellError {
     fn from(err: io::Error) -> Self {
         ShellError::IoError(err)

@@ -6,9 +6,15 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
+/// Track last tab press time for double-tab detection
 static LAST_TAB_TIME: AtomicU64 = AtomicU64::new(0);
+/// Track whether tab was pressed recently
 static TAB_PRESSED: AtomicBool = AtomicBool::new(false);
 
+/// Trie (prefix tree) node for efficient command completion
+///
+/// Stores commands in a tree structure where each node represents a character.
+/// This enables fast prefix matching for tab completion.
 struct TrieNode {
     children: HashMap<char, TrieNode>,
     is_end: bool,
@@ -24,6 +30,7 @@ impl TrieNode {
         }
     }
 
+    /// Insert a word into the trie
     fn insert(&mut self, word: String) {
         let mut current = self;
         for ch in word.chars() {
@@ -33,10 +40,12 @@ impl TrieNode {
         current.word = word;
     }
 
+    /// Find all words with the given prefix
     fn find_prefix(&self, prefix: &str) -> Vec<String> {
         let mut current = self;
         let mut results = Vec::new();
 
+        // Navigate to the prefix node
         for ch in prefix.chars() {
             if let Some(node) = current.children.get(&ch) {
                 current = node;
@@ -45,10 +54,12 @@ impl TrieNode {
             }
         }
 
+        // Collect all words under this prefix
         Self::collect_words(current, &mut results);
         results
     }
 
+    /// Recursively collect all complete words from this node
     fn collect_words(node: &TrieNode, results: &mut Vec<String>) {
         if node.is_end {
             results.push(node.word.clone());
@@ -59,16 +70,25 @@ impl TrieNode {
         }
     }
 
+    /// Find the longest common prefix for completion
+    ///
+    /// Returns:
+    /// - If single match: the complete word with a trailing space
+    /// - If multiple matches with common prefix longer than input: the common prefix
+    /// - If double-tab (< 500ms): display all matches and return None
+    /// - Otherwise: return None
     fn find_common_prefix(&self, prefix: &str) -> Option<String> {
         let mut matches = self.find_prefix(prefix);
         if matches.is_empty() {
             return None;
         }
 
+        // Single match: complete with space
         if matches.len() == 1 {
             return Some(matches[0].clone() + " ");
         }
 
+        // Find longest common prefix among all matches
         matches.sort();
         let mut common_prefix = matches[0].clone();
         for name in &matches[1..] {
@@ -77,13 +97,16 @@ impl TrieNode {
             }
         }
 
+        // If we can extend the prefix, do so
         if common_prefix.len() > prefix.len() {
             Some(common_prefix)
         } else {
+            // Handle double-tab: show all matches if pressed within 500ms
             let now = Instant::now().elapsed().as_millis() as u64;
             let last_tab = LAST_TAB_TIME.load(Ordering::Relaxed);
 
             if now - last_tab < 500 {
+                // Double-tab detected: show all matches
                 println!("\n{}", matches.join("  "));
                 print!("$ {}", prefix);
                 let _ = std::io::stdout().flush();
@@ -98,12 +121,17 @@ impl TrieNode {
     }
 }
 
+/// Engine that provides command completion using a Trie for efficiency
+///
+/// Caches all available commands (built-ins + PATH executables) in a Trie
+/// for fast prefix-based completion.
 pub struct CompletionEngine {
     builtin_commands: HashSet<String>,
     trie: Arc<RwLock<TrieNode>>,
 }
 
 impl CompletionEngine {
+    /// Create a new completion engine with the given built-in commands
     pub fn new(builtins: HashSet<String>) -> Self {
         let engine = Self {
             builtin_commands: builtins,
@@ -113,13 +141,19 @@ impl CompletionEngine {
         engine
     }
 
+    /// Refresh the completion cache by rebuilding the Trie
+    ///
+    /// Scans all directories in PATH and inserts all executable names
+    /// along with built-in commands into the Trie.
     pub fn refresh_cache(&self) {
         let mut trie = self.trie.write().unwrap();
 
+        // Add built-in commands
         for cmd in &self.builtin_commands {
             trie.insert(cmd.clone());
         }
 
+        // Add executables from PATH
         if let Some(paths) = env::var_os("PATH") {
             for dir in env::split_paths(&paths) {
                 if let Ok(entries) = std::fs::read_dir(dir) {
@@ -134,12 +168,18 @@ impl CompletionEngine {
     }
 }
 
+/// Rustyline helper that integrates with the completion engine
+///
+/// Implements the Completer trait to provide tab completion for commands.
+/// Also derives Helper, Hinter, Highlighter, and Validator for full
+/// rustyline integration.
 #[derive(Helper, Hinter, Highlighter, Validator)]
 pub struct RustylineHelper {
     completion_engine: CompletionEngine,
 }
 
 impl RustylineHelper {
+    /// Create a new helper with the given built-in commands
     pub fn new(builtins: HashSet<String>) -> Self {
         Self {
             completion_engine: CompletionEngine::new(builtins),
@@ -150,12 +190,17 @@ impl RustylineHelper {
 impl rustyline::completion::Completer for RustylineHelper {
     type Candidate = String;
 
+    /// Provide completion candidates for the word at the cursor position
+    ///
+    /// Extracts the word being typed, searches the Trie for matches,
+    /// and returns the completion suggestion.
     fn complete(
         &self,
         line: &str,
         pos: usize,
         _ctx: &rustyline::Context<'_>,
     ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
+        // Find the start of the current word (after last whitespace)
         let (word_start, word) = line[..pos]
             .char_indices()
             .rev()
@@ -163,6 +208,7 @@ impl rustyline::completion::Completer for RustylineHelper {
             .map(|(i, _)| (i + 1, &line[i + 1..pos]))
             .unwrap_or((0, &line[..pos]));
 
+        // Get completion from the Trie
         if let Some(completion) = self
             .completion_engine
             .trie

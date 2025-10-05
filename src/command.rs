@@ -1,22 +1,34 @@
 use std::path::PathBuf;
 
+/// Tokens produced by the lexer during command parsing
 #[derive(Debug, PartialEq)]
 enum Token {
+    /// A word or argument (handles quoted strings and escape sequences)
     Word(String),
-    OutputRedirect(bool), // bool indicates append mode
-    ErrorRedirect(bool),  // bool indicates append mode
+    /// Output redirection (>, >> or 1>, 1>>). Bool indicates append mode
+    OutputRedirect(bool),
+    /// Error redirection (2>, 2>>). Bool indicates append mode
+    ErrorRedirect(bool),
+    /// Pipe operator (|)
     Pipe,
+    /// Background operator (&)
     Background,
 }
 
+/// Parsed command with its arguments and redirections
 #[derive(Debug)]
 pub struct CommandParts {
+    /// The command name
     pub command: String,
+    /// Command arguments
     pub args: Vec<String>,
+    /// Output redirection (file path, append mode)
     pub output_redirect: Option<(PathBuf, bool)>,
+    /// Error redirection (file path, append mode)
     pub error_redirect: Option<(PathBuf, bool)>,
 }
 
+/// Lexer that tokenizes shell command input
 struct Lexer {
     position: usize,
     chars: Vec<char>,
@@ -30,10 +42,12 @@ impl Lexer {
         }
     }
 
+    /// Peek at the current character without consuming it
     fn peek(&self) -> Option<char> {
         self.chars.get(self.position).copied()
     }
 
+    /// Advance to the next character and return the current one
     fn advance(&mut self) -> Option<char> {
         if self.position < self.chars.len() {
             let ch = self.chars[self.position];
@@ -44,6 +58,8 @@ impl Lexer {
         }
     }
 
+    /// Read a word, handling quotes and escape sequences
+    /// Supports single quotes (literal), double quotes (with escapes), and backslash escaping
     fn read_word(&mut self) -> String {
         let mut word = String::new();
         let mut in_quotes = None;
@@ -90,15 +106,18 @@ impl Lexer {
         word
     }
 
+    /// Tokenize the input string into a sequence of tokens
     fn tokenize(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
 
         while let Some(ch) = self.peek() {
             match ch {
+                // Skip whitespace
                 ' ' | '\t' => {
                     self.advance();
                 }
 
+                // Handle output redirection: > or >>
                 '>' => {
                     self.advance();
                     if self.peek() == Some('>') {
@@ -109,6 +128,7 @@ impl Lexer {
                     }
                 }
 
+                // Handle explicit stdout redirection: 1> or 1>>
                 '1' => {
                     self.advance();
                     if self.peek() == Some('>') {
@@ -120,10 +140,12 @@ impl Lexer {
                             tokens.push(Token::OutputRedirect(false)); // overwrite mode
                         }
                     } else {
+                        // Just the number "1", not a redirect
                         tokens.push(Token::Word("1".to_string()));
                     }
                 }
 
+                // Handle stderr redirection: 2> or 2>>
                 '2' => {
                     self.advance();
                     if self.peek() == Some('>') {
@@ -135,18 +157,22 @@ impl Lexer {
                             tokens.push(Token::ErrorRedirect(false));
                         }
                     } else {
+                        // Just the number "2", not a redirect
                         tokens.push(Token::Word("2".to_string()));
                     }
                 }
 
+                // Pipe operator
                 '|' => {
                     self.advance();
                     tokens.push(Token::Pipe);
                 }
+                // Background operator
                 '&' => {
                     self.advance();
                     tokens.push(Token::Background);
                 }
+                // Regular word or argument
                 _ => {
                     let word = self.read_word();
                     if !word.is_empty() {
@@ -159,9 +185,19 @@ impl Lexer {
     }
 }
 
+/// Parser that converts tokens into a structured command representation
 pub struct CommandParser;
 
 impl CommandParser {
+    /// Parse a command line string into CommandParts
+    ///
+    /// # Examples
+    /// ```
+    /// let cmd = CommandParser::parse("echo hello > output.txt");
+    /// // cmd.command = "echo"
+    /// // cmd.args = ["hello"]
+    /// // cmd.output_redirect = Some(("output.txt", false))
+    /// ```
     pub fn parse(input: &str) -> CommandParts {
         let mut lexer = Lexer::new(input.to_string());
         let tokens = lexer.tokenize();
@@ -175,9 +211,11 @@ impl CommandParser {
 
         let mut tokens_iter = tokens.into_iter().peekable();
 
+        // Process tokens to build command structure
         while let Some(token) = tokens_iter.next() {
             match token {
                 Token::Word(word) => {
+                    // First word is the command, rest are arguments
                     if command_parts.command.is_empty() {
                         command_parts.command = word;
                     } else {
@@ -185,15 +223,18 @@ impl CommandParser {
                     }
                 }
                 Token::OutputRedirect(append) => {
+                    // Next token should be the file path
                     if let Some(Token::Word(path)) = tokens_iter.next() {
                         command_parts.output_redirect = Some((PathBuf::from(path), append));
                     }
                 }
                 Token::ErrorRedirect(append) => {
+                    // Next token should be the file path
                     if let Some(Token::Word(path)) = tokens_iter.next() {
                         command_parts.error_redirect = Some((PathBuf::from(path), append));
                     }
                 }
+                // Pipe and Background tokens are recognized but not yet handled
                 _ => {}
             }
         }

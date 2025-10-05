@@ -67,6 +67,10 @@ To build and run Shelly locally:
 3. Build the project: `cargo build`
 4. Run the shell: `cargo run`
 
+### Testing
+* Run all tests: `cargo test`
+* Run specific test: `cargo test <test_name>`
+
 ### Deployment
 To deploy Shelly, you can:
 * Build a release binary: `cargo build --release` and distribute it as a standalone executable.
